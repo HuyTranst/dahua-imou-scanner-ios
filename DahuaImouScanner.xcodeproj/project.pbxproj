@@ -1,0 +1,274 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		6B321FAED69D4BF9BC8124E3 /* DahuaImouScannerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21DA9ED278984B2DA6ABC7B2 /* DahuaImouScannerApp.swift */; };
+		DD7DD8211F454A7F9C063B8E /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B68A557B7E16430F8B5B14F7 /* ContentView.swift */; };
+		B7E1BF81F395482BAF735C45 /* DahuaScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC20E96E0ACA4084866D5A17 /* DahuaScanner.swift */; };
+		154F8DB176544B7C8247D582 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AB09D5079B994F2FA1E1AFEB /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		9DA81DA8CEB3446C82679286 /* DahuaImouScanner.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DahuaImouScanner.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		21DA9ED278984B2DA6ABC7B2 /* DahuaImouScannerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DahuaImouScannerApp.swift; sourceTree = "<group>"; };
+		B68A557B7E16430F8B5B14F7 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		DC20E96E0ACA4084866D5A17 /* DahuaScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DahuaScanner.swift; sourceTree = "<group>"; };
+		AB09D5079B994F2FA1E1AFEB /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		8B3F714AF0434AB993041ADB /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		7E6CE69708BA433EBFBFC7C2 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		EC3DE157F13645F99F997D06 = {
+			isa = PBXGroup;
+			children = (
+				EC2EEEB714384093AE02B59C /* DahuaImouScanner */,
+				1D3FE9E7F00445AD9CC9EF34 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		EC2EEEB714384093AE02B59C /* DahuaImouScanner */ = {
+			isa = PBXGroup;
+			children = (
+				21DA9ED278984B2DA6ABC7B2 /* DahuaImouScannerApp.swift */,
+				B68A557B7E16430F8B5B14F7 /* ContentView.swift */,
+				DC20E96E0ACA4084866D5A17 /* DahuaScanner.swift */,
+				AB09D5079B994F2FA1E1AFEB /* Assets.xcassets */,
+				8B3F714AF0434AB993041ADB /* Info.plist */,
+			);
+			path = DahuaImouScanner;
+			sourceTree = "<group>";
+		};
+		1D3FE9E7F00445AD9CC9EF34 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				9DA81DA8CEB3446C82679286 /* DahuaImouScanner.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		B8E6F942514E48418EFAF9AB /* DahuaImouScanner */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4239F4F3E4CE45F588DEDAE0 /* Build configuration list for PBXNativeTarget "DahuaImouScanner" */;
+			buildPhases = (
+				B65E5B0E6F9844E2A7D0FA1A /* Sources */,
+				7E6CE69708BA433EBFBFC7C2 /* Frameworks */,
+				60BDACC86F054A329150D167 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = DahuaImouScanner;
+			productName = DahuaImouScanner;
+			productReference = 9DA81DA8CEB3446C82679286 /* DahuaImouScanner.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		D56BD4EA454D495CB35911C3 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					B8E6F942514E48418EFAF9AB = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = 92D1F7E772EA4C58B9939DE4 /* Build configuration list for PBXProject "DahuaImouScanner" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = EC3DE157F13645F99F997D06;
+			productRefGroup = 1D3FE9E7F00445AD9CC9EF34 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				B8E6F942514E48418EFAF9AB /* DahuaImouScanner */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		60BDACC86F054A329150D167 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				154F8DB176544B7C8247D582 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		B65E5B0E6F9844E2A7D0FA1A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6B321FAED69D4BF9BC8124E3 /* DahuaImouScannerApp.swift in Sources */,
+				DD7DD8211F454A7F9C063B8E /* ContentView.swift in Sources */,
+				B7E1BF81F395482BAF735C45 /* DahuaScanner.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		8D616EEE9851457EBD25A1D0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		56CC346221714931A094E612 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_OPTIMIZATION_LEVEL = s;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		8B43FB14B11143A1A55E3ACB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_IDENTITY = "";
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGNING_ALLOWED = NO;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = DahuaImouScanner/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.dahua.imouscanner;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		516A8359FF7C466985A51F61 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_IDENTITY = "";
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGNING_ALLOWED = NO;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = DahuaImouScanner/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.dahua.imouscanner;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		92D1F7E772EA4C58B9939DE4 /* Build configuration list for PBXProject "DahuaImouScanner" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8D616EEE9851457EBD25A1D0 /* Debug */,
+				56CC346221714931A094E612 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		4239F4F3E4CE45F588DEDAE0 /* Build configuration list for PBXNativeTarget "DahuaImouScanner" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8B43FB14B11143A1A55E3ACB /* Debug */,
+				516A8359FF7C466985A51F61 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+	};
+	rootObject = D56BD4EA454D495CB35911C3 /* Project object */;
+}

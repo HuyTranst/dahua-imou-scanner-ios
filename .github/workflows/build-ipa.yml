@@ -1,0 +1,63 @@
+name: Build iOS IPA
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-ipa:
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Select Xcode Version
+        run: |
+          sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
+          xcodebuild -version
+
+      - name: Build Application (.app)
+        run: |
+          set -o pipefail
+          xcodebuild -project DahuaImouScanner.xcodeproj \
+                     -scheme DahuaImouScanner \
+                     -configuration Release \
+                     -sdk iphoneos \
+                     -derivedDataPath build/DerivedData \
+                     CODE_SIGNING_ALLOWED=NO \
+                     CODE_SIGNING_REQUIRED=NO \
+                     CODE_SIGN_IDENTITY="" \
+                     clean build
+
+      - name: Package into IPA
+        run: |
+          mkdir -p Payload
+          APP_PATH=$(find build/DerivedData -name "DahuaImouScanner.app" -type d | head -n 1)
+          if [ -z "$APP_PATH" ]; then
+            echo "Error: DahuaImouScanner.app not found!"
+            exit 1
+          fi
+          echo "Found app at: $APP_PATH"
+          cp -r "$APP_PATH" Payload/
+          zip -qr DahuaImouScanner.ipa Payload
+          echo "IPA package created successfully!"
+          ls -lh DahuaImouScanner.ipa
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DahuaImouScanner-IPA
+          path: DahuaImouScanner.ipa
+          retention-days: 14
+
+      - name: Create GitHub Release (Only for Tags)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: DahuaImouScanner.ipa
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
