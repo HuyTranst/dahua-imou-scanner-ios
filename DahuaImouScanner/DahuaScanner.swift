@@ -350,6 +350,7 @@ public class DahuaScanner: ObservableObject {
             
             guard let addrPtr = current.pointee.ifa_addr else { continue }
             let family = addrPtr.pointee.sa_family
+            let flags = Int32(current.pointee.ifa_flags)
             let flagLoopback: Int32 = 0x8
             let flagUp: Int32 = 0x1
 
