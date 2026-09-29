@@ -40,7 +40,7 @@ struct ContentView: View {
                             if scanner.isScanning {
                                 scanner.stopScan()
                             } else {
-                                scanner.startScan(timeout: 4.5)
+                                scanner.startScan(timeout: 6.0)
                             }
                         }) {
                             HStack(spacing: 6) {
@@ -224,11 +224,11 @@ struct DeviceRowView: View {
                     .cornerRadius(4)
 
                 Text(device.isInitialized ? "Đã kích hoạt" : "Chưa kích hoạt")
-                    .font(.caption2)
-                    .padding(.horizontal, 5)
+                    .font(.caption2.bold())
+                    .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(device.isInitialized ? Color.gray.opacity(0.1) : Color.orange.opacity(0.2))
-                    .foregroundColor(device.isInitialized ? .secondary : .orange)
+                    .background(device.isInitialized ? Color.green.opacity(0.15) : Color.orange.opacity(0.2))
+                    .foregroundColor(device.isInitialized ? .green : .orange)
                     .cornerRadius(4)
 
                 Spacer()
@@ -258,7 +258,7 @@ struct DeviceDetailView: View {
                     DetailRow(title: "Số Serial (SN)", value: device.serialNo, isMonospaced: true)
                     DetailRow(title: "Địa chỉ MAC", value: device.mac, isMonospaced: true)
                     DetailRow(title: "Firmware", value: device.firmwareVersion)
-                    DetailRow(title: "Trạng thái kích hoạt", value: device.isInitialized ? "Đã kích hoạt (Init: 1)" : "Chưa kích hoạt (Init: 0)")
+                    DetailRow(title: "Trạng thái kích hoạt", value: device.isInitialized ? "Đã kích hoạt (Mã: \(device.initVal))" : "Chưa kích hoạt (Mã: \(device.initVal))")
                 }
 
                 Section(header: Text("Cấu hình mạng & Cổng kết nối")) {
