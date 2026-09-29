@@ -28,6 +28,7 @@ jobs:
           xcodebuild -project DahuaImouScanner.xcodeproj \
                      -scheme DahuaImouScanner \
                      -configuration Release \
+                     -destination 'generic/platform=iOS' \
                      -sdk iphoneos \
                      -derivedDataPath build/DerivedData \
                      CODE_SIGNING_ALLOWED=NO \

@@ -215,13 +215,16 @@ public class DahuaScanner: ObservableObject {
         header[6] = 0x49 // 'I'
         header[7] = 0x50 // 'P'
         
-        // Ghi jsonLen vào byte 16..19 và 24..27
-        withUnsafeBytes(of: jsonLen.littleEndian) { rawBytes in
-            for i in 0..<4 {
-                header[16 + i] = rawBytes[i]
-                header[24 + i] = rawBytes[i]
-            }
-        }
+        // Ghi jsonLen vào byte 16..19 và 24..27 (Little-Endian)
+        header[16] = UInt8(jsonLen & 0xFF)
+        header[17] = UInt8((jsonLen >> 8) & 0xFF)
+        header[18] = UInt8((jsonLen >> 16) & 0xFF)
+        header[19] = UInt8((jsonLen >> 24) & 0xFF)
+
+        header[24] = header[16]
+        header[25] = header[17]
+        header[26] = header[18]
+        header[27] = header[19]
 
         var data = Data(header)
         data.append(jsonData)
@@ -256,11 +259,11 @@ public class DahuaScanner: ObservableObject {
         // Cắt chuỗi JSON từ dấu '{' đầu tiên đến dấu '}' cuối cùng để loại bỏ byte rác/padding
         guard let firstBrace = data.firstIndex(of: 0x7B), // '{'
               let lastBrace = data.lastIndex(of: 0x7D),  // '}'
-              lastBrace > firstBrace else {
+              lastBrace >= firstBrace else {
             return
         }
 
-        let jsonSlice = data.subdata(in: firstBrace...lastBrace)
+        let jsonSlice = data.subdata(in: firstBrace..<(lastBrace + 1))
         guard let jsonString = String(data: jsonSlice, encoding: .utf8) ??
                                String(data: jsonSlice, encoding: .ascii),
               let jsonObject = try? JSONSerialization.jsonObject(with: jsonSlice, options: []) as? [String: Any] else {
@@ -347,10 +350,11 @@ public class DahuaScanner: ObservableObject {
             
             guard let addrPtr = current.pointee.ifa_addr else { continue }
             let family = addrPtr.pointee.sa_family
-            let flags = Int32(current.pointee.ifa_flags)
+            let flagLoopback: Int32 = 0x8
+            let flagUp: Int32 = 0x1
 
             // Chỉ lấy IPv4 và bỏ qua loopback
-            if family == UInt8(AF_INET) && (flags & IFF_LOOPBACK) == 0 && (flags & IFF_UP) != 0 {
+            if family == UInt8(AF_INET) && (flags & flagLoopback) == 0 && (flags & flagUp) != 0 {
                 var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
                 if getnameinfo(addrPtr, socklen_t(MemoryLayout<sockaddr_in>.size), &hostname, socklen_t(hostname.count), nil, 0, NI_NUMERICHOST) == 0 {
                     let ipStr = String(cString: hostname)
