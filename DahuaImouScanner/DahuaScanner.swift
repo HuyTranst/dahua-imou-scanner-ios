@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Network
 
 // MARK: - Models
 
@@ -36,35 +37,84 @@ public struct DahuaDevice: Identifiable, Hashable {
     }
 }
 
-// MARK: - Dahua / Imou UDP Scanner Engine
+// MARK: - Dahua / Imou Scanner Engine (Dual-Engine: UDP DHIP + TCP 37777 Check)
 
 public class DahuaScanner: ObservableObject {
     @Published public var discoveredDevices: [DahuaDevice] = []
     @Published public var isScanning: Bool = false
     @Published public var statusMessage: String = "Sẵn sàng quét mạng LAN"
+    @Published public var localIpAddress: String = "Đang kiểm tra..."
+    @Published public var targetSubnetPrefix: String = "192.168.1"
+    @Published public var scanLogs: [String] = []
 
     private var socketFd: Int32 = -1
     private let queue = DispatchQueue(label: "com.dahua.scanner", qos: .userInitiated)
+    private var browser: NWBrowser?
 
-    public init() {}
+    public init() {
+        refreshLocalIp()
+        triggerLocalNetworkPrivacyPrompt()
+    }
 
-    /// Bắt đầu quét các camera Dahua / Imou trong mạng LAN
-    public func startScan(timeout: TimeInterval = 4.0) {
-        guard !isScanning else { return }
-        
-        DispatchQueue.main.async {
-            self.discoveredDevices.removeAll()
-            self.isScanning = true
-            self.statusMessage = "Đang quét mạng tìm camera Dahua / Imou..."
-        }
+    /// Kích hoạt popup xin quyền Local Network của Apple bằng Network.framework
+    public func triggerLocalNetworkPrivacyPrompt() {
+        let params = NWParameters()
+        params.includePeerToPeer = true
+        let browser = NWBrowser(for: .bonjour(type: "_dahua._udp", domain: nil), using: params)
+        browser.stateUpdateHandler = { _ in }
+        browser.start(queue: queue)
+        self.browser = browser
+    }
 
-        queue.async { [weak self] in
-            guard let self = self else { return }
-            self.performDiscovery(timeout: timeout)
+    /// Cập nhật IP hiện tại của iPhone
+    public func refreshLocalIp() {
+        let ips = getLocalIPv4Addresses()
+        if let first = ips.first(where: { !$0.hasPrefix("127.") && !$0.isEmpty }) {
+            DispatchQueue.main.async {
+                self.localIpAddress = first
+                let parts = first.split(separator: ".")
+                if parts.count == 4 {
+                    self.targetSubnetPrefix = "\(parts[0]).\(parts[1]).\(parts[2])"
+                }
+            }
+        } else {
+            DispatchQueue.main.async {
+                self.localIpAddress = "192.168.1.1 (Mặc định)"
+            }
         }
     }
 
-    /// Dừng quét
+    public func addLog(_ msg: String) {
+        let timeStr = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)
+        DispatchQueue.main.async {
+            self.scanLogs.append("[\(timeStr)] \(msg)")
+            if self.scanLogs.count > 100 {
+                self.scanLogs.removeFirst()
+            }
+        }
+    }
+
+    /// Bắt đầu quét toàn diện
+    public func startScan(timeout: TimeInterval = 4.0) {
+        guard !isScanning else { return }
+
+        refreshLocalIp()
+
+        DispatchQueue.main.async {
+            self.discoveredDevices.removeAll()
+            self.scanLogs.removeAll()
+            self.isScanning = true
+            self.statusMessage = "Đang quét dải \(self.targetSubnetPrefix).1 - 254..."
+        }
+
+        addLog("Bắt đầu quét mạng. Subnet: \(targetSubnetPrefix).0/24")
+
+        queue.async { [weak self] in
+            guard let self = self else { return }
+            self.performDiscovery(subnet: self.targetSubnetPrefix, timeout: timeout)
+        }
+    }
+
     public func stopScan() {
         if socketFd >= 0 {
             close(socketFd)
@@ -74,36 +124,33 @@ public class DahuaScanner: ObservableObject {
             self.isScanning = false
             self.statusMessage = "Đã dừng quét. Tìm thấy \(self.discoveredDevices.count) camera."
         }
+        addLog("Đã dừng quét.")
     }
 
     // MARK: - Core Discovery Logic
-    private func performDiscovery(timeout: TimeInterval) {
-        // 1. Tạo UDP socket
+    private func performDiscovery(subnet: String, timeout: TimeInterval) {
         socketFd = socket(AF_INET, SOCK_DGRAM, 0)
         guard socketFd >= 0 else {
             DispatchQueue.main.async {
                 self.isScanning = false
-                self.statusMessage = "Lỗi: Không thể khởi tạo UDP socket"
+                self.statusMessage = "Lỗi: Không tạo được UDP socket"
             }
+            addLog("Lỗi: Không tạo được UDP socket")
             return
         }
 
-        // Cho phép Broadcast
         var broadcastEnable: Int32 = 1
         setsockopt(socketFd, SOL_SOCKET, SO_BROADCAST, &broadcastEnable, socklen_t(MemoryLayout<Int32>.size))
 
-        // Cho phép reuse address & port
         var reuse: Int32 = 1
         setsockopt(socketFd, SOL_SOCKET, SO_REUSEADDR, &reuse, socklen_t(MemoryLayout<Int32>.size))
         #if os(iOS)
         setsockopt(socketFd, SOL_SOCKET, SO_REUSEPORT, &reuse, socklen_t(MemoryLayout<Int32>.size))
         #endif
 
-        // Set Timeout cho recvfrom (200ms mỗi lần lặp)
-        var tv = timeval(tv_sec: 0, tv_usec: 200_000)
+        var tv = timeval(tv_sec: 0, tv_usec: 150_000)
         setsockopt(socketFd, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
 
-        // Bind socket tới cổng ngẫu nhiên khả dụng
         var bindAddr = sockaddr_in()
         bindAddr.sin_family = sa_family_t(AF_INET)
         bindAddr.sin_addr.s_addr = in_addr_t(0)
@@ -118,39 +165,28 @@ public class DahuaScanner: ObservableObject {
         if bindResult < 0 {
             close(socketFd)
             socketFd = -1
-            DispatchQueue.main.async {
-                self.isScanning = false
-                self.statusMessage = "Lỗi: Không thể bind socket"
-            }
+            addLog("Lỗi: Không bind được socket")
             return
         }
 
-        // 2. Tạo gói tin DHIP Search Request chuẩn xác 100% theo Dahua NetSDK
+        // Tạo gói tin DHIP Search Request chuẩn xác
         let packet = buildDhipSearchPacket()
 
-        // 3. Lấy IP cục bộ của thiết bị để tính subnet và quét unicast sweep
-        let localIps = getLocalIPv4Addresses()
-        
-        // Gửi Multicast và Global Broadcast port 37810
+        // 1. Gửi Broadcast & Multicast
+        addLog("Gửi UDP Broadcast 255.255.255.255:37810")
         sendPacket(packet, toHost: "255.255.255.255", port: 37810)
         sendPacket(packet, toHost: "239.255.255.251", port: 37810)
+        sendPacket(packet, toHost: "\(subnet).255", port: 37810)
 
-        // Gửi Subnet Broadcast và Unicast Sweep toàn dải (1..254)
-        // Kỹ thuật này giúp vượt qua 100% các bộ định tuyến Wi-Fi chặn Broadcast/Multicast!
-        for localIp in localIps {
-            let parts = localIp.split(separator: ".")
-            if parts.count == 4 {
-                let subnetPrefix = "\(parts[0]).\(parts[1]).\(parts[2])"
-                // Gửi subnet broadcast (ví dụ 192.168.1.255)
-                sendPacket(packet, toHost: "\(subnetPrefix).255", port: 37810)
-                
-                // Unicast sweep toàn bộ subnet (1 -> 254)
-                for host in 1...254 {
-                    let targetIp = "\(subnetPrefix).\(host)"
-                    sendPacket(packet, toHost: targetIp, port: 37810)
-                }
-            }
+        // 2. Gửi Unicast Sweep qua tất cả 254 IP của dải mạng
+        addLog("Quét Unicast 254 IP: \(subnet).1 -> \(subnet).254")
+        for host in 1...254 {
+            let targetIp = "\(subnet).\(host)"
+            sendPacket(packet, toHost: targetIp, port: 37810)
         }
+
+        // 3. Quét TCP 37777 song song (NetSDK Port Ping) để phát hiện camera dù bị chặn UDP
+        checkTcpPortsAndProbe(subnet: subnet, packet: packet)
 
         // 4. Lắng nghe phản hồi từ camera
         let startTime = Date()
@@ -180,11 +216,46 @@ public class DahuaScanner: ObservableObject {
 
         DispatchQueue.main.async {
             self.isScanning = false
-            self.statusMessage = "Quét hoàn tất. Tìm thấy \(self.discoveredDevices.count) camera Dahua / Imou."
+            self.statusMessage = "Hoàn tất! Tìm thấy \(self.discoveredDevices.count) camera."
+        }
+        addLog("Quét hoàn tất: Tìm thấy \(self.discoveredDevices.count) camera.")
+    }
+
+    /// Quét cổng TCP 37777 (NetSDK Port) để đảm bảo không bỏ sót bất kỳ camera nào
+    private func checkTcpPortsAndProbe(subnet: String, packet: Data) {
+        let group = DispatchGroup()
+        for host in 1...254 {
+            let ip = "\(subnet).\(host)"
+            group.enter()
+            queue.async {
+                let s = socket(AF_INET, SOCK_STREAM, 0)
+                if s >= 0 {
+                    var tv = timeval(tv_sec: 0, tv_usec: 120_000)
+                    setsockopt(s, SOL_SOCKET, SO_SNDTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
+                    
+                    var addr = sockaddr_in()
+                    addr.sin_family = sa_family_t(AF_INET)
+                    addr.sin_port = in_port_t(37777).bigEndian
+                    inet_pton(AF_INET, ip, &addr.sin_addr)
+                    
+                    let res = withUnsafePointer(to: &addr) {
+                        $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                            connect(s, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+                        }
+                    }
+                    close(s)
+                    
+                    if res == 0 {
+                        self.addLog("Phát hiện cổng NetSDK 37777 MỞ tại \(ip)! Gửi gói tin DHIP...")
+                        self.sendPacket(packet, toHost: ip, port: 37810)
+                    }
+                }
+                group.leave()
+            }
         }
     }
 
-    /// Đóng gói gói tin DHIP Search Request chuẩn xác từng byte
+    /// Đóng gói gói tin DHIP Search Request chuẩn xác
     private func buildDhipSearchPacket() -> Data {
         let jsonDict: [String: Any] = [
             "method": "DHDiscover.search",
@@ -200,14 +271,6 @@ public class DahuaScanner: ObservableObject {
 
         let jsonLen = UInt32(jsonData.count)
 
-        // 32-byte DHIP Header:
-        // Byte 0..3: Header length = 32 (0x20, 0x00, 0x00, 0x00) Little-Endian
-        // Byte 4..7: Magic ASCII 'DHIP' (0x44, 0x48, 0x49, 0x50)
-        // Byte 8..15: 0x00 (Reserved)
-        // Byte 16..19: jsonLen (Little-Endian)
-        // Byte 20..23: 0x00 (Reserved)
-        // Byte 24..27: jsonLen (Little-Endian)
-        // Byte 28..31: 0x00 (Reserved)
         var header = [UInt8](repeating: 0, count: 32)
         header[0] = 0x20 // 32 bytes header size
         header[4] = 0x44 // 'D'
@@ -215,7 +278,6 @@ public class DahuaScanner: ObservableObject {
         header[6] = 0x49 // 'I'
         header[7] = 0x50 // 'P'
         
-        // Ghi jsonLen vào byte 16..19 và 24..27 (Little-Endian)
         header[16] = UInt8(jsonLen & 0xFF)
         header[17] = UInt8((jsonLen >> 8) & 0xFF)
         header[18] = UInt8((jsonLen >> 16) & 0xFF)
@@ -252,13 +314,11 @@ public class DahuaScanner: ObservableObject {
     private func parseIncomingPacket(_ data: Data, senderIp: String) {
         guard data.count > 32 else { return }
 
-        // Kiểm tra magic 'DHIP' ở byte 4..7
         let magic = data.subdata(in: 4..<8)
         guard magic == Data([0x44, 0x48, 0x49, 0x50]) else { return }
 
-        // Cắt chuỗi JSON từ dấu '{' đầu tiên đến dấu '}' cuối cùng để loại bỏ byte rác/padding
-        guard let firstBrace = data.firstIndex(of: 0x7B), // '{'
-              let lastBrace = data.lastIndex(of: 0x7D),  // '}'
+        guard let firstBrace = data.firstIndex(of: 0x7B),
+              let lastBrace = data.lastIndex(of: 0x7D),
               lastBrace >= firstBrace else {
             return
         }
@@ -291,7 +351,6 @@ public class DahuaScanner: ObservableObject {
         let gateway = (ipv4Obj?["DefaultGateway"] as? String) ?? "0.0.0.0"
         let dhcp = (ipv4Obj?["DhcpEnable"] as? Bool) ?? true
 
-        // Phân loại Dahua vs Imou
         let brand: DahuaDevice.Brand
         let lowerVendor = vendor.lowercased()
         let lowerMachine = machineName.lowercased()
@@ -325,6 +384,8 @@ public class DahuaScanner: ObservableObject {
             rawJson: jsonString
         )
 
+        addLog(">>> Nhận diện thành công: [\(brand.rawValue)] \(machineName) tại \(ip) (SN: \(serialNo))")
+
         DispatchQueue.main.async {
             if let idx = self.discoveredDevices.firstIndex(where: { $0.id == device.id }) {
                 self.discoveredDevices[idx] = device
@@ -334,7 +395,6 @@ public class DahuaScanner: ObservableObject {
         }
     }
 
-    /// Lấy danh sách IP nội bộ của iPhone / iPad
     private func getLocalIPv4Addresses() -> [String] {
         var addresses: [String] = []
         var ifaddr: UnsafeMutablePointer<ifaddrs>?
@@ -354,7 +414,6 @@ public class DahuaScanner: ObservableObject {
             let flagLoopback: Int32 = 0x8
             let flagUp: Int32 = 0x1
 
-            // Chỉ lấy IPv4 và bỏ qua loopback
             if family == UInt8(AF_INET) && (flags & flagLoopback) == 0 && (flags & flagUp) != 0 {
                 var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
                 if getnameinfo(addrPtr, socklen_t(MemoryLayout<sockaddr_in>.size), &hostname, socklen_t(hostname.count), nil, 0, NI_NUMERICHOST) == 0 {

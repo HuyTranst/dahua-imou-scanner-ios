@@ -25,6 +25,12 @@
     <key>NSLocalNetworkUsageDescription</key>
     <string>Ứng dụng cần quyền truy cập mạng cục bộ để quét và nhận diện các camera Dahua, Imou trong mạng Wi-Fi của bạn.</string>
 
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_dahua._udp</string>
+        <string>_dahua._tcp</string>
+    </array>
+
     <key>UIApplicationSceneManifest</key>
     <dict>
         <key>UIApplicationSupportsMultipleScenes</key>
