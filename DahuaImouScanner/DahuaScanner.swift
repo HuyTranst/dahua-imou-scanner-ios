@@ -341,16 +341,22 @@ public class DahuaScanner: ObservableObject {
         }
         defer { freeifaddrs(ifaddr) }
 
-        for ptr in sequence(first: firstAddr, next: { $0.pointee.ifa_next }) {
-            let flags = Int32(ptr.pointee.ifa_flags)
-            let addr = ptr.pointee.ifa_addr.pointee
+        var ptr: UnsafeMutablePointer<ifaddrs>? = firstAddr
+        while let current = ptr {
+            defer { ptr = current.pointee.ifa_next }
+            
+            guard let addrPtr = current.pointee.ifa_addr else { continue }
+            let family = addrPtr.pointee.sa_family
+            let flags = Int32(current.pointee.ifa_flags)
 
-            // Chỉ lấy IPv4 và không lấy loopback (127.0.0.1)
-            if addr.sa_family == UInt8(AF_INET) && (flags & IFF_LOOPBACK) == 0 && (flags & IFF_UP) != 0 {
+            // Chỉ lấy IPv4 và bỏ qua loopback
+            if family == UInt8(AF_INET) && (flags & IFF_LOOPBACK) == 0 && (flags & IFF_UP) != 0 {
                 var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
-                if getnameinfo(ptr.pointee.ifa_addr, socklen_t(addr.sa_len), &hostname, socklen_t(hostname.count), nil, 0, NI_NUMERICHOST) == 0 {
+                if getnameinfo(addrPtr, socklen_t(MemoryLayout<sockaddr_in>.size), &hostname, socklen_t(hostname.count), nil, 0, NI_NUMERICHOST) == 0 {
                     let ipStr = String(cString: hostname)
-                    addresses.append(ipStr)
+                    if !ipStr.isEmpty && ipStr != "127.0.0.1" {
+                        addresses.append(ipStr)
+                    }
                 }
             }
         }
