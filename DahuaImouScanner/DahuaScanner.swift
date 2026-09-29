@@ -97,7 +97,7 @@ public class DahuaScanner: ObservableObject {
     }
 
     /// Bắt đầu quét toàn diện
-    public func startScan(timeout: TimeInterval = 6.5) {
+    public func startScan(timeout: TimeInterval = 6.0) {
         guard !isScanning else { return }
 
         var subnetToScan = targetSubnetPrefix.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -156,11 +156,7 @@ public class DahuaScanner: ObservableObject {
         setsockopt(socketFd, SOL_SOCKET, SO_REUSEPORT, &reuse, socklen_t(MemoryLayout<Int32>.size))
         #endif
 
-        // Tăng bộ đệm nhận của Kernel lên 512KB để không bị rớt gói tin
-        var rcvBufSize: Int32 = 512 * 1024
-        setsockopt(socketFd, SOL_SOCKET, SO_RCVBUF, &rcvBufSize, socklen_t(MemoryLayout<Int32>.size))
-
-        var tv = timeval(tv_sec: 0, tv_usec: 150_000)
+        var tv = timeval(tv_sec: 0, tv_usec: 100_000)
         setsockopt(socketFd, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
 
         var bindAddr = sockaddr_in()
@@ -181,97 +177,64 @@ public class DahuaScanner: ObservableObject {
             return
         }
 
+        // Tạo gói tin DHIP Search Request chuẩn xác
         let packet = buildDhipSearchPacket()
-        let scanStartTime = Date()
 
-        // 1. TIẾN TRÌNH LẮNG NGHE ĐỘC LẬP TRÊN THREAD RIÊNG (LIÊN TỤC 100%, KHÔNG BỊ BLOCK)
-        let listenGroup = DispatchGroup()
-        listenGroup.enter()
-        DispatchQueue.global(qos: .userInteractive).async { [weak self] in
-            defer { listenGroup.leave() }
-            guard let self = self else { return }
-            var buffer = [UInt8](repeating: 0, count: 65535)
+        // Hàm gửi sweep có độ trễ 2.5ms để không làm tràn hàng đợi Wi-Fi
+        func sendPacedSweep(round: Int) {
+            self.addLog("Đợt \(round): Gửi Broadcast & Unicast \(subnet).1 -> .254...")
+            self.sendPacket(packet, toHost: "255.255.255.255", port: 37810)
+            self.sendPacket(packet, toHost: "239.255.255.251", port: 37810)
+            self.sendPacket(packet, toHost: "\(subnet).255", port: 37810)
 
-            while self.isScanning && self.socketFd >= 0 && Date().timeIntervalSince(scanStartTime) < timeout {
-                var senderAddr = sockaddr_in()
-                var senderLen = socklen_t(MemoryLayout<sockaddr_in>.size)
-
-                let bytesRead = withUnsafeMutablePointer(to: &senderAddr) {
-                    $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-                        recvfrom(self.socketFd, &buffer, buffer.count, 0, $0, &senderLen)
-                    }
-                }
-
-                if bytesRead > 32 {
-                    let packetData = Data(buffer[0..<bytesRead])
-                    let senderIp = String(cString: inet_ntoa(senderAddr.sin_addr))
-                    self.parseIncomingPacket(packetData, senderIp: senderIp)
-                }
+            for host in 1...254 {
+                let targetIp = "\(subnet).\(host)"
+                self.sendPacket(packet, toHost: targetIp, port: 37810)
+                usleep(2500) // 2.5ms delay tránh drop packet trên chip Wi-Fi iPhone
             }
         }
 
-        // 2. CHẠY QUÉT TCP 37777 NON-BLOCKING (ĐỂ ĐÁNH THỨC CAMERA & GỬI TARGETED PROBE)
+        // 1. Gửi Đợt 1 ngay lập tức
+        sendPacedSweep(round: 1)
+
+        // 2. Chạy kiểm tra cổng TCP 37777 trên background concurrent queue
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             self.checkTcpPortsAndProbe(subnet: subnet, packet: packet)
         }
 
-        // 3. TIẾN TRÌNH PHÁT GÓI UDP ĐA ĐỢT (MULTI-ROUND PACED SENDER)
-        func sendTargets(_ hosts: [Int], roundName: String) {
-            self.addLog("\(roundName): Gửi unicast tới \(hosts.count) địa chỉ IP...")
-            self.sendPacket(packet, toHost: "255.255.255.255", port: 37810)
-            self.sendPacket(packet, toHost: "239.255.255.251", port: 37810)
-            self.sendPacket(packet, toHost: "\(subnet).255", port: 37810)
+        // 3. Lắng nghe phản hồi từ camera & chạy Đợt 2 sau 1.8 giây
+        let startTime = Date()
+        var buffer = [UInt8](repeating: 0, count: 65535)
+        var secondSweepSent = false
 
-            for host in hosts {
-                guard self.isScanning && self.socketFd >= 0 else { break }
-                let targetIp = "\(subnet).\(host)"
-                // Gửi 2 gói cách nhau ngắn để chống rớt gói Wi-Fi
-                self.sendPacket(packet, toHost: targetIp, port: 37810)
-                usleep(1500)
-                self.sendPacket(packet, toHost: targetIp, port: 37810)
-                usleep(1500)
+        while Date().timeIntervalSince(startTime) < timeout && socketFd >= 0 {
+            var senderAddr = sockaddr_in()
+            var senderLen = socklen_t(MemoryLayout<sockaddr_in>.size)
+
+            let bytesRead = withUnsafeMutablePointer(to: &senderAddr) {
+                $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                    recvfrom(socketFd, &buffer, buffer.count, 0, $0, &senderLen)
+                }
             }
-        }
 
-        // Đợt 1: Quét toàn bộ dải mạng 1...254
-        sendTargets(Array(1...254), roundName: "Đợt 1")
-
-        // Chờ 1.5 giây
-        Thread.sleep(forTimeInterval: 1.5)
-
-        // Đợt 2: Quét lại những IP chưa phản hồi
-        if self.isScanning && self.socketFd >= 0 {
-            let respondedIps = Set(self.discoveredDevices.map { $0.ip })
-            let missingHosts = (1...254).filter { !respondedIps.contains("\(subnet).\($0)") }
-            if !missingHosts.isEmpty {
-                sendTargets(missingHosts, roundName: "Đợt 2 (Bổ sung)")
+            if bytesRead > 32 {
+                let packetData = Data(buffer[0..<bytesRead])
+                let senderIp = String(cString: inet_ntoa(senderAddr.sin_addr))
+                parseIncomingPacket(packetData, senderIp: senderIp)
             }
-        }
 
-        // Chờ 1.5 giây
-        Thread.sleep(forTimeInterval: 1.5)
-
-        // Đợt 3: Đợt quét chốt chặn cuối cùng cho các camera ở xa/mạng yếu như Sau Vườn
-        if self.isScanning && self.socketFd >= 0 {
-            let respondedIps = Set(self.discoveredDevices.map { $0.ip })
-            let missingHosts = (1...254).filter { !respondedIps.contains("\(subnet).\($0)") }
-            if !missingHosts.isEmpty {
-                sendTargets(missingHosts, roundName: "Đợt 3 (Chốt chặn)")
+            // Kích hoạt Đợt 2 sau 1.8s để bắt sạch camera bị trễ gói
+            if !secondSweepSent && Date().timeIntervalSince(startTime) >= 1.8 {
+                secondSweepSent = true
+                sendPacedSweep(round: 2)
             }
-        }
-
-        // Chờ hết timeout
-        let remaining = timeout - Date().timeIntervalSince(scanStartTime)
-        if remaining > 0 {
-            Thread.sleep(forTimeInterval: remaining)
         }
 
         if socketFd >= 0 {
             close(socketFd)
             socketFd = -1
         }
-        _ = listenGroup.wait(timeout: .now() + 0.5)
 
         DispatchQueue.main.async {
             self.isScanning = false
@@ -280,9 +243,9 @@ public class DahuaScanner: ObservableObject {
         addLog("Quét hoàn tất: Tìm thấy \(self.discoveredDevices.count) camera.")
     }
 
-    /// Quét cổng TCP 37777 (NetSDK Port) non-blocking để đánh thức camera và gửi probe tức thì
+    /// Quét cổng TCP 37777 (NetSDK Port) trên nền concurrent để kích hoạt camera nếu cần
     private func checkTcpPortsAndProbe(subnet: String, packet: Data) {
-        let semaphore = DispatchSemaphore(value: 30)
+        let semaphore = DispatchSemaphore(value: 20)
         let group = DispatchGroup()
 
         for host in 1...254 {
@@ -299,11 +262,9 @@ public class DahuaScanner: ObservableObject {
 
                 let s = socket(AF_INET, SOCK_STREAM, 0)
                 guard s >= 0 else { return }
-                defer { close(s) }
 
-                // Chế độ non-blocking để không bị treo 75s trên các IP không có thiết bị
-                let flags = fcntl(s, F_GETFL, 0)
-                _ = fcntl(s, F_SETFL, flags | O_NONBLOCK)
+                var tv = timeval(tv_sec: 0, tv_usec: 120_000)
+                setsockopt(s, SOL_SOCKET, SO_SNDTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
 
                 var addr = sockaddr_in()
                 addr.sin_family = sa_family_t(AF_INET)
@@ -315,30 +276,10 @@ public class DahuaScanner: ObservableObject {
                         connect(s, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
                     }
                 }
+                close(s)
 
-                var isPortOpen = false
                 if res == 0 {
-                    isPortOpen = true
-                } else if errno == EINPROGRESS {
-                    var pfd = pollfd(fd: s, events: Int16(POLLOUT), revents: 0)
-                    let pollRes = poll(&pfd, 1, 200) // 200ms timeout
-                    if pollRes > 0 && (pfd.revents & Int16(POLLOUT)) != 0 {
-                        var error: Int32 = 0
-                        var len = socklen_t(MemoryLayout<Int32>.size)
-                        getsockopt(s, SOL_SOCKET, SO_ERROR, &error, &len)
-                        if error == 0 {
-                            isPortOpen = true
-                        }
-                    }
-                }
-
-                if isPortOpen {
-                    self.addLog("Phát hiện cổng NetSDK 37777 MỞ tại \(ip)! Gửi DHIP probe...")
-                    // Gửi 3 gói UDP probe liên tiếp tới camera để đảm bảo nhận được phản hồi
-                    for _ in 0..<3 {
-                        self.sendPacket(packet, toHost: ip, port: 37810)
-                        usleep(15000) // 15ms
-                    }
+                    self.sendPacket(packet, toHost: ip, port: 37810)
                 }
             }
         }
@@ -491,22 +432,6 @@ public class DahuaScanner: ObservableObject {
             } else {
                 self.discoveredDevices.append(device)
             }
-            self.sortDiscoveredDevices()
-        }
-    }
-
-    private func sortDiscoveredDevices() {
-        self.discoveredDevices.sort { dev1, dev2 in
-            let p1 = dev1.ip.split(separator: ".").compactMap { Int($0) }
-            let p2 = dev2.ip.split(separator: ".").compactMap { Int($0) }
-            if p1.count == 4 && p2.count == 4 {
-                for i in 0..<4 {
-                    if p1[i] != p2[i] {
-                        return p1[i] < p2[i]
-                    }
-                }
-            }
-            return dev1.ip < dev2.ip
         }
     }
 
