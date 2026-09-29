@@ -24,7 +24,7 @@ jobs:
 
       - name: Build Application (.app)
         run: |
-          set -o pipefail
+          set +e
           xcodebuild -project DahuaImouScanner.xcodeproj \
                      -scheme DahuaImouScanner \
                      -configuration Release \
@@ -35,8 +35,18 @@ jobs:
                      CODE_SIGNING_REQUIRED=NO \
                      CODE_SIGN_IDENTITY="" \
                      PROVISIONING_PROFILE_SPECIFIER="" \
+                     DEVELOPMENT_TEAM="" \
                      VALIDATE_PRODUCT=NO \
-                     clean build
+                     clean build > xcodebuild.log 2>&1
+          STATUS=$?
+          if [ $STATUS -ne 0 ]; then
+            echo "::error::xcodebuild failed with exit code $STATUS"
+            echo "========== XCODEBUILD FULL LOG (LAST 200 LINES) =========="
+            tail -n 200 xcodebuild.log
+            echo "==========================================================="
+            exit $STATUS
+          fi
+          echo "Build succeeded!"
 
       - name: Package into IPA
         run: |
