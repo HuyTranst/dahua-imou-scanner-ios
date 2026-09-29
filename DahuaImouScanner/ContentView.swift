@@ -40,7 +40,7 @@ struct ContentView: View {
                             if scanner.isScanning {
                                 scanner.stopScan()
                             } else {
-                                scanner.startScan(timeout: 6.0)
+                                scanner.startScan(timeout: 6.5)
                             }
                         }) {
                             HStack(spacing: 6) {
