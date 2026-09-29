@@ -67,19 +67,20 @@ public class DahuaScanner: ObservableObject {
     }
 
     /// Cập nhật IP hiện tại của iPhone
+    /// Cập nhật IP hiện tại của iPhone (ưu tiên tuyệt đối Wi-Fi en0)
     public func refreshLocalIp() {
         let ips = getLocalIPv4Addresses()
-        if let first = ips.first(where: { !$0.hasPrefix("127.") && !$0.isEmpty }) {
-            DispatchQueue.main.async {
-                self.localIpAddress = first
-                let parts = first.split(separator: ".")
-                if parts.count == 4 {
-                    self.targetSubnetPrefix = "\(parts[0]).\(parts[1]).\(parts[2])"
-                }
-            }
-        } else {
-            DispatchQueue.main.async {
-                self.localIpAddress = "192.168.1.1 (Mặc định)"
+        let preferredIp = ips.first(where: { $0.hasPrefix("192.168.") }) ??
+                          ips.first(where: { !$0.hasPrefix("10.") && !$0.hasPrefix("127.") }) ??
+                          ips.first ?? "192.168.1.94"
+
+        DispatchQueue.main.async {
+            self.localIpAddress = preferredIp
+            let parts = preferredIp.split(separator: ".")
+            if parts.count == 4 && !preferredIp.hasPrefix("10.") {
+                self.targetSubnetPrefix = "\(parts[0]).\(parts[1]).\(parts[2])"
+            } else if self.targetSubnetPrefix.hasPrefix("10.") || self.targetSubnetPrefix.isEmpty {
+                self.targetSubnetPrefix = "192.168.1"
             }
         }
     }
@@ -98,20 +99,26 @@ public class DahuaScanner: ObservableObject {
     public func startScan(timeout: TimeInterval = 4.0) {
         guard !isScanning else { return }
 
-        refreshLocalIp()
+        var subnetToScan = targetSubnetPrefix.trimmingCharacters(in: .whitespacesAndNewlines)
+        if subnetToScan.isEmpty || subnetToScan.hasPrefix("10.") {
+            subnetToScan = "192.168.1"
+            DispatchQueue.main.async {
+                self.targetSubnetPrefix = "192.168.1"
+            }
+        }
 
         DispatchQueue.main.async {
             self.discoveredDevices.removeAll()
             self.scanLogs.removeAll()
             self.isScanning = true
-            self.statusMessage = "Đang quét dải \(self.targetSubnetPrefix).1 - 254..."
+            self.statusMessage = "Đang quét dải \(subnetToScan).1 - 254..."
         }
 
-        addLog("Bắt đầu quét mạng. Subnet: \(targetSubnetPrefix).0/24")
+        addLog("Bắt đầu quét mạng Wi-Fi. Subnet: \(subnetToScan).0/24")
 
         queue.async { [weak self] in
             guard let self = self else { return }
-            self.performDiscovery(subnet: self.targetSubnetPrefix, timeout: timeout)
+            self.performDiscovery(subnet: subnetToScan, timeout: timeout)
         }
     }
 
@@ -396,11 +403,13 @@ public class DahuaScanner: ObservableObject {
     }
 
     private func getLocalIPv4Addresses() -> [String] {
-        var addresses: [String] = []
+        var wifiAddresses: [String] = []
+        var otherLanAddresses: [String] = []
+        var cellularAddresses: [String] = []
         var ifaddr: UnsafeMutablePointer<ifaddrs>?
 
         guard getifaddrs(&ifaddr) == 0, let firstAddr = ifaddr else {
-            return ["192.168.1.1"]
+            return ["192.168.1.94"]
         }
         defer { freeifaddrs(ifaddr) }
 
@@ -415,16 +424,31 @@ public class DahuaScanner: ObservableObject {
             let flagUp: Int32 = 0x1
 
             if family == UInt8(AF_INET) && (flags & flagLoopback) == 0 && (flags & flagUp) != 0 {
+                let ifName = String(cString: current.pointee.ifa_name)
                 var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
                 if getnameinfo(addrPtr, socklen_t(MemoryLayout<sockaddr_in>.size), &hostname, socklen_t(hostname.count), nil, 0, NI_NUMERICHOST) == 0 {
                     let ipStr = String(cString: hostname)
                     if !ipStr.isEmpty && ipStr != "127.0.0.1" {
-                        addresses.append(ipStr)
+                        if ifName == "en0" || ifName.hasPrefix("en") {
+                            wifiAddresses.append(ipStr)
+                        } else if ifName.hasPrefix("pdp_ip") {
+                            cellularAddresses.append(ipStr)
+                        } else {
+                            otherLanAddresses.append(ipStr)
+                        }
                     }
                 }
             }
         }
 
-        return addresses.isEmpty ? ["192.168.1.1"] : addresses
+        // Ưu tiên số 1: Wi-Fi en0
+        if let wifi = wifiAddresses.first {
+            return [wifi]
+        }
+        // Ưu tiên số 2: Các dải 192.168.x
+        if let lan = otherLanAddresses.first(where: { $0.hasPrefix("192.168.") }) {
+            return [lan]
+        }
+        return wifiAddresses.isEmpty ? (otherLanAddresses.isEmpty ? ["192.168.1.94"] : otherLanAddresses) : wifiAddresses
     }
 }
